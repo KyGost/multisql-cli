@@ -3,6 +3,9 @@ name = "multisql-cli"
 version = "0.0.0"
 authors = ["Kyran Gostelow <kyran@gostelow.me>"]
 edition = "2021"
+description = "MultiSQL CLI"
+license = "Apache-2.0"
+repository = "https://github.com/KyGost/multisql-cli"
 
 [dependencies]
 dialoguer = "^0"
