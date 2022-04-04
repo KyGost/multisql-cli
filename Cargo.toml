@@ -1,0 +1,12 @@
+[package]
+name = "multisql-cli"
+version = "0.0.0"
+authors = ["Kyran Gostelow <kyran@gostelow.me>"]
+edition = "2021"
+
+[dependencies]
+dialoguer = "^0"
+indicatif = "^0"
+multisql = "0.0.2"
+lazy_static = "^1"
+console = "^0"
