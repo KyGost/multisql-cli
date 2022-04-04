@@ -1,11 +1,11 @@
+use cli_table::{print_stdout, Cell, Table};
+use multisql::{Cast, Payload};
 use {
-	console::Style,
-	dialoguer::{theme::ColorfulTheme, Confirm, Editor, Input, Select},
+	dialoguer::{theme::ColorfulTheme, Input},
 	indicatif::{ProgressBar, ProgressStyle},
 	lazy_static::lazy_static,
-	multisql::{CSVStorage, Glue, SledStorage, Storage},
+	multisql::Glue,
 };
-
 lazy_static! {
 	pub(crate) static ref PROGRESS_STYLE: ProgressStyle = ProgressStyle::default_spinner()
 		.template("{spinner:.magenta} {elapsed:3.red} {msg:.green}")
@@ -17,90 +17,40 @@ fn main() {
 	while prompt(&mut glue) {}
 }
 
-const PROMPT_ACTION: [&str; 2] = ["Connect", "Query"];
-const PROMPT_KIND: [&str; 2] = ["Sled", "CSV"];
-const QUERY_KIND: [&str; 3] = ["Small", "Big", "File"];
-
 fn prompt(glue: &mut Glue) -> bool {
-	let mut input_theme = ColorfulTheme::default();
-	input_theme.active_item_prefix = Style::new().green().apply_to(String::from("•-"));
-
-	match Select::with_theme(&input_theme)
-		.items(&PROMPT_ACTION)
-		.default(0)
+	let query: String = Input::with_theme(&ColorfulTheme::default())
+		.with_prompt("Query")
 		.interact()
-		.unwrap()
-	{
-		0 => {
-			let name = Input::with_theme(&input_theme)
-				.with_prompt("Name")
-				.interact()
-				.unwrap();
-			let new_storage = match Select::with_theme(&input_theme)
-				.items(&PROMPT_KIND)
-				.default(0)
-				.interact()
-				.unwrap()
-			{
-				0 => {
-					let path: String = Input::with_theme(&input_theme)
-						.with_prompt("Path")
-						.interact()
-						.unwrap();
-					Storage::new_sled(SledStorage::new(&path).unwrap())
-				}
-				1 => {
-					let path: String = Input::with_theme(&input_theme)
-						.with_prompt("Path")
-						.interact()
-						.unwrap();
-					Storage::new_csv(CSVStorage::new(&path).unwrap())
-				}
-				_ => unreachable!(),
-			};
-			glue.extend(vec![Glue::new(name, new_storage)]);
+		.unwrap();
+
+	let progress = ProgressBar::new_spinner()
+		.with_message(format!("Running Query"))
+		.with_style(PROGRESS_STYLE.clone());
+	progress.enable_steady_tick(200);
+	let result = glue.execute(&query);
+	progress.finish();
+
+	match result {
+		Err(err) => println!("{:?}", err),
+		Ok(Payload::Select { labels, rows }) => {
+			let table = rows
+				.into_iter()
+				.map(|row| {
+					row.0
+						.into_iter()
+						.map(|value| {
+							let string: String = value.cast().unwrap();
+							string.cell()
+						})
+						.collect()
+				})
+				.collect::<Vec<Vec<_>>>()
+				.table()
+				.title(labels.into_iter().map(|label| label.cell()).collect::<Vec<_>>());
+			print_stdout(table).unwrap()
 		}
-		1 => {
-			let query = match Select::with_theme(&input_theme)
-				.items(&QUERY_KIND)
-				.default(0)
-				.interact()
-				.unwrap()
-			{
-				0 => Input::with_theme(&input_theme)
-					.with_prompt("Query")
-					.interact()
-					.unwrap(),
-				1 => {
-					let text = Editor::new()
-						.extension("sql")
-						.require_save(false)
-						.edit("")
-						.unwrap()
-						.unwrap();
-					println!("{}", text);
-					Confirm::with_theme(&input_theme)
-						.with_prompt("Run")
-						.default(true)
-						.interact()
-						.unwrap();
-					text
-				}
-				2 => unimplemented!(),
-				_ => unreachable!(),
-			};
-
-			let progress = ProgressBar::new_spinner()
-				.with_message(format!("Running Query"))
-				.with_style(PROGRESS_STYLE.clone());
-			progress.enable_steady_tick(200);
-
-			glue.execute(&query).unwrap();
-
-			progress.finish();
-		}
-		_ => unreachable!(),
-	}
+		Ok(payload) => println!("{:?}", payload),
+	};
 
 	true
 }
