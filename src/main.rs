@@ -1,10 +1,14 @@
 use cli_table::{print_stdout, Cell, Table};
-use multisql::{Cast, Payload};
+use multisql::{Cast, Connection, Payload};
 use {
 	dialoguer::{theme::ColorfulTheme, Input},
 	indicatif::{ProgressBar, ProgressStyle},
 	lazy_static::lazy_static,
 	multisql::Glue,
+	std::{
+		fs::OpenOptions,
+		io::{prelude::*, SeekFrom},
+	},
 };
 lazy_static! {
 	pub(crate) static ref PROGRESS_STYLE: ProgressStyle = ProgressStyle::default_spinner()
@@ -13,8 +17,42 @@ lazy_static! {
 }
 
 fn main() {
-	let mut glue = Glue::new_multi(vec![]);
-	while prompt(&mut glue) {}
+	let mut connection_file_path = dirs::home_dir().unwrap();
+	connection_file_path.push(".multisql-cli.json");
+	
+	let mut connection_file = OpenOptions::new()
+		.read(true)
+		.write(true)
+		.create(true)
+		.open(&connection_file_path)
+		.unwrap();
+	let mut connection_json = String::new();
+	connection_file
+		.read_to_string(&mut connection_json)
+		.unwrap();
+	if connection_json == "" {
+		connection_json = String::from("[]")
+	};
+
+	let connections: Vec<(String, Connection)> = serde_json::from_str(&connection_json).unwrap();
+	let databases = connections
+		.into_iter()
+		.map(|(name, connection)| (name, connection.try_into().unwrap()))
+		.collect();
+
+	let mut glue = Glue::new_multi(databases);
+
+	prompt(&mut glue);
+
+	let connection_json = serde_json::to_string(&glue.into_connections()).unwrap();
+	connection_file.set_len(0).unwrap();
+	connection_file.seek(SeekFrom::Start(0)).unwrap();
+	connection_file
+		.write_all(&connection_json.into_bytes())
+		.unwrap();
+	connection_file.flush().unwrap();
+
+	main();
 }
 
 fn prompt(glue: &mut Glue) -> bool {
@@ -46,7 +84,12 @@ fn prompt(glue: &mut Glue) -> bool {
 				})
 				.collect::<Vec<Vec<_>>>()
 				.table()
-				.title(labels.into_iter().map(|label| label.cell()).collect::<Vec<_>>());
+				.title(
+					labels
+						.into_iter()
+						.map(|label| label.cell())
+						.collect::<Vec<_>>(),
+				);
 			print_stdout(table).unwrap()
 		}
 		Ok(payload) => println!("{:?}", payload),
