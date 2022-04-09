@@ -18,7 +18,7 @@ lazy_static! {
 
 fn main() {
 	let mut connection_file_path = dirs::home_dir().unwrap();
-	connection_file_path.push(".multisql-cli.json");
+	connection_file_path.push(".multisql-cli.yaml");
 	
 	let mut connection_file = OpenOptions::new()
 		.read(true)
@@ -34,7 +34,7 @@ fn main() {
 		connection_json = String::from("[]")
 	};
 
-	let connections: Vec<(String, Connection)> = serde_json::from_str(&connection_json).unwrap();
+	let connections: Vec<(String, Connection)> = serde_yaml::from_str(&connection_json).unwrap();
 	let databases = connections
 		.into_iter()
 		.map(|(name, connection)| (name, connection.try_into().unwrap()))
@@ -44,7 +44,7 @@ fn main() {
 
 	prompt(&mut glue);
 
-	let connection_json = serde_json::to_string(&glue.into_connections()).unwrap();
+	let connection_json = serde_yaml::to_string(&glue.into_connections()).unwrap();
 	connection_file.set_len(0).unwrap();
 	connection_file.seek(SeekFrom::Start(0)).unwrap();
 	connection_file
