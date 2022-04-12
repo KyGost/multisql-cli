@@ -19,7 +19,7 @@ lazy_static! {
 fn main() {
 	let mut connection_file_path = dirs::home_dir().unwrap();
 	connection_file_path.push(".multisql-cli.yaml");
-	
+
 	let mut connection_file = OpenOptions::new()
 		.read(true)
 		.write(true)
